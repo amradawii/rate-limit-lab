@@ -1,4 +1,5 @@
 import type { Clock } from './Clock.js';
+import { KeyStore } from './KeyStore.js';
 import {
   assertCost,
   assertPositiveInteger,
@@ -29,7 +30,7 @@ export class SlidingWindowCounterLimiter implements RateLimiter {
   readonly limit: number;
   readonly windowMs: number;
   readonly #clock: Clock;
-  readonly #state = new Map<string, CounterState>();
+  readonly #store: KeyStore<CounterState>;
 
   constructor(options: WindowOptions, clock: Clock) {
     assertPositiveInteger('limit', options.limit);
@@ -37,6 +38,12 @@ export class SlidingWindowCounterLimiter implements RateLimiter {
     this.limit = options.limit;
     this.windowMs = options.windowMs;
     this.#clock = clock;
+    // The current count still weighs on the next window; the previous one only on this window.
+    this.#store = new KeyStore(
+      clock,
+      (s, now) => s.windowStart + (s.current > 0 ? 2 : 1) * this.windowMs <= now,
+      options.keys,
+    );
   }
 
   consume(key: string, cost = 1): RateLimitResult {
@@ -45,11 +52,8 @@ export class SlidingWindowCounterLimiter implements RateLimiter {
     const now = this.#clock.now();
     const windowStart = Math.floor(now / W) * W;
 
-    let s = this.#state.get(key);
-    if (!s) {
-      s = { windowStart, previous: 0, current: 0 };
-      this.#state.set(key, s);
-    } else if (s.windowStart !== windowStart) {
+    const s = this.#store.getOrCreate(key, () => ({ windowStart, previous: 0, current: 0 }));
+    if (s.windowStart !== windowStart) {
       // One window later: current becomes previous. Two or more: both are stale.
       s.previous = s.windowStart === windowStart - W ? s.current : 0;
       s.current = 0;
@@ -85,6 +89,10 @@ export class SlidingWindowCounterLimiter implements RateLimiter {
 
   /** Counters held across all keys: always two per key (edge case #2). */
   storedEntries(): number {
-    return this.#state.size * 2;
+    return this.#store.size * 2;
+  }
+
+  trackedKeys(): number {
+    return this.#store.size;
   }
 }

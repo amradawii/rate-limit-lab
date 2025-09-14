@@ -1,4 +1,5 @@
 import type { Clock } from './Clock.js';
+import { KeyStore } from './KeyStore.js';
 import {
   assertCost,
   assertPositiveInteger,
@@ -20,7 +21,7 @@ export class SlidingLogLimiter implements RateLimiter {
   readonly limit: number;
   readonly windowMs: number;
   readonly #clock: Clock;
-  readonly #logs = new Map<string, number[]>();
+  readonly #store: KeyStore<number[]>;
 
   constructor(options: WindowOptions, clock: Clock) {
     assertPositiveInteger('limit', options.limit);
@@ -28,17 +29,21 @@ export class SlidingLogLimiter implements RateLimiter {
     this.limit = options.limit;
     this.windowMs = options.windowMs;
     this.#clock = clock;
+    // Expired once the newest logged request has left the window.
+    this.#store = new KeyStore(
+      clock,
+      (log, now) => {
+        const newest = log.at(-1);
+        return newest === undefined || newest + this.windowMs <= now;
+      },
+      options.keys,
+    );
   }
 
   consume(key: string, cost = 1): RateLimitResult {
     assertCost(cost, this.limit);
     const now = this.#clock.now();
-
-    let log = this.#logs.get(key);
-    if (!log) {
-      log = [];
-      this.#logs.set(key, log);
-    }
+    const log = this.#store.getOrCreate(key, () => []);
 
     // Oldest first. An entry stops counting once a full window has passed since it.
     let expired = 0;
@@ -68,7 +73,11 @@ export class SlidingLogLimiter implements RateLimiter {
   /** Total timestamps held across all keys: the memory cost of exactness (edge case #2). */
   storedEntries(): number {
     let total = 0;
-    for (const log of this.#logs.values()) total += log.length;
+    for (const log of this.#store.values()) total += log.length;
     return total;
+  }
+
+  trackedKeys(): number {
+    return this.#store.size;
   }
 }

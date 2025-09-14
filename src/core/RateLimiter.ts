@@ -1,3 +1,5 @@
+import type { KeyStoreOptions } from './KeyStore.js';
+
 export interface RateLimitResult {
   allowed: boolean;
   /** Requests allowed per window (token bucket: bucket capacity). */
@@ -17,11 +19,14 @@ export interface RateLimiter {
   /** Window length in milliseconds (token bucket: time to refill from empty). */
   readonly windowMs: number;
   consume(key: string, cost?: number): RateLimitResult;
+  /** Number of keys currently holding state. */
+  trackedKeys(): number;
 }
 
 export interface WindowOptions {
   limit: number;
   windowMs: number;
+  keys?: KeyStoreOptions;
 }
 
 export function assertPositiveInteger(name: string, value: number): void {

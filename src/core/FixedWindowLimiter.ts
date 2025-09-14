@@ -1,4 +1,5 @@
 import type { Clock } from './Clock.js';
+import { KeyStore } from './KeyStore.js';
 import {
   assertCost,
   assertPositiveInteger,
@@ -24,7 +25,7 @@ export class FixedWindowLimiter implements RateLimiter {
   readonly limit: number;
   readonly windowMs: number;
   readonly #clock: Clock;
-  readonly #state = new Map<string, WindowState>();
+  readonly #store: KeyStore<WindowState>;
 
   constructor(options: WindowOptions, clock: Clock) {
     assertPositiveInteger('limit', options.limit);
@@ -32,6 +33,12 @@ export class FixedWindowLimiter implements RateLimiter {
     this.limit = options.limit;
     this.windowMs = options.windowMs;
     this.#clock = clock;
+    // A key's state is meaningless once its window has ended.
+    this.#store = new KeyStore(
+      clock,
+      (s, now) => s.windowStart + this.windowMs <= now,
+      options.keys,
+    );
   }
 
   consume(key: string, cost = 1): RateLimitResult {
@@ -39,10 +46,10 @@ export class FixedWindowLimiter implements RateLimiter {
     const now = this.#clock.now();
     const windowStart = Math.floor(now / this.windowMs) * this.windowMs;
 
-    let state = this.#state.get(key);
-    if (!state || state.windowStart !== windowStart) {
-      state = { windowStart, count: 0 };
-      this.#state.set(key, state);
+    const state = this.#store.getOrCreate(key, () => ({ windowStart, count: 0 }));
+    if (state.windowStart !== windowStart) {
+      state.windowStart = windowStart;
+      state.count = 0;
     }
 
     const resetMs = windowStart + this.windowMs - now;
@@ -56,5 +63,9 @@ export class FixedWindowLimiter implements RateLimiter {
       resetMs,
       retryAfterMs: allowed ? 0 : resetMs,
     };
+  }
+
+  trackedKeys(): number {
+    return this.#store.size;
   }
 }

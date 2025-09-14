@@ -1,4 +1,5 @@
 import type { Clock } from './Clock.js';
+import { KeyStore, type KeyStoreOptions } from './KeyStore.js';
 import {
   assertCost,
   assertPositiveInteger,
@@ -11,6 +12,7 @@ export interface TokenBucketOptions {
   capacity: number;
   /** Tokens added per second: the long-run average rate. */
   refillPerSecond: number;
+  keys?: KeyStoreOptions;
 }
 
 interface Bucket {
@@ -36,7 +38,7 @@ export class TokenBucketLimiter implements RateLimiter {
   readonly refillPerSecond: number;
   readonly #capacityMilli: number;
   readonly #clock: Clock;
-  readonly #buckets = new Map<string, Bucket>();
+  readonly #store: KeyStore<Bucket>;
 
   constructor(options: TokenBucketOptions, clock: Clock) {
     assertPositiveInteger('capacity', options.capacity);
@@ -46,6 +48,14 @@ export class TokenBucketLimiter implements RateLimiter {
     this.windowMs = Math.ceil((options.capacity * MILLI) / options.refillPerSecond);
     this.#capacityMilli = options.capacity * MILLI;
     this.#clock = clock;
+    // Expired once the bucket would be full again: a new bucket starts full, so nothing changes.
+    this.#store = new KeyStore(
+      clock,
+      (b, now) =>
+        b.milliTokens + Math.floor(now - b.lastRefill) * this.refillPerSecond >=
+        this.#capacityMilli,
+      options.keys,
+    );
   }
 
   consume(key: string, cost = 1): RateLimitResult {
@@ -53,11 +63,10 @@ export class TokenBucketLimiter implements RateLimiter {
     const now = this.#clock.now();
     const rate = this.refillPerSecond; // milli-tokens per millisecond
 
-    let bucket = this.#buckets.get(key);
-    if (!bucket) {
-      bucket = { milliTokens: this.#capacityMilli, lastRefill: now };
-      this.#buckets.set(key, bucket);
-    }
+    const bucket = this.#store.getOrCreate(key, () => ({
+      milliTokens: this.#capacityMilli,
+      lastRefill: now,
+    }));
 
     const wholeMs = Math.floor(now - bucket.lastRefill);
     if (wholeMs > 0) {
@@ -84,6 +93,10 @@ export class TokenBucketLimiter implements RateLimiter {
 
   /** Exact bucket level in milli-tokens (for tests and inspection). */
   milliTokens(key: string): number | undefined {
-    return this.#buckets.get(key)?.milliTokens;
+    return this.#store.peek(key)?.milliTokens;
+  }
+
+  trackedKeys(): number {
+    return this.#store.size;
   }
 }
