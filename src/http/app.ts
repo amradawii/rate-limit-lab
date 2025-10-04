@@ -5,6 +5,7 @@ import type { RateLimiter } from '../core/RateLimiter.js';
 import { SlidingLogLimiter } from '../core/SlidingLogLimiter.js';
 import { SlidingWindowCounterLimiter } from '../core/SlidingWindowCounterLimiter.js';
 import { TokenBucketLimiter } from '../core/TokenBucketLimiter.js';
+import { createHonoKeyResolver, type ClientKeyOptions } from './clientKey.js';
 import { rateLimit } from './rateLimit.js';
 
 export type AlgorithmName =
@@ -13,7 +14,7 @@ export type AlgorithmName =
   | 'sliding-window-counter'
   | 'token-bucket';
 
-export interface AppOptions {
+export interface AppOptions extends ClientKeyOptions {
   clock?: Clock;
   keyResolver?: (c: Context) => string;
 }
@@ -32,7 +33,11 @@ export function createDefaultLimiters(clock: Clock): Record<AlgorithmName, RateL
 
 export function createApp(options: AppOptions = {}): Hono {
   const clock = options.clock ?? new MonotonicClock();
-  const keyResolver = options.keyResolver ?? (() => 'local');
+  const keyResolver =
+    options.keyResolver ??
+    createHonoKeyResolver(
+      options.trustedProxies !== undefined ? { trustedProxies: options.trustedProxies } : {},
+    );
   const limiters = createDefaultLimiters(clock);
   const middlewares = new Map<AlgorithmName, ReturnType<typeof rateLimit>>();
 
