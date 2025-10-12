@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rate limit lab</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="bg-stone-50 text-stone-900 antialiased">
+    <main class="mx-auto max-w-5xl px-6 py-8 text-[15px] leading-relaxed">
+      <p class="mb-6 text-[15px] text-stone-700">
+        <strong class="font-semibold text-stone-950">Rate limit lab</strong> — Deterministic
+        comparison of four rate-limiting algorithms and two client-key edge cases over identical
+        request timelines.
+      </p>
+
+      <nav
+        id="scenario-tabs"
+        role="tablist"
+        aria-label="Scenarios"
+        class="mb-6 flex flex-wrap gap-1.5 border-b border-stone-200 pb-3"
+      ></nav>
+
+      <section
+        id="scenario-panel"
+        aria-live="polite"
+        class="mb-8 rounded border border-stone-200 bg-white p-5"
+      >
+        <div class="mb-4 grid gap-3 border-b border-stone-100 pb-4 md:grid-cols-2">
+          <div>
+            <div class="mb-1 text-xs font-semibold uppercase tracking-wide text-stone-500">
+              The problem
+            </div>
+            <p id="scenario-problem" class="text-[14px] text-stone-800"></p>
+          </div>
+          <div>
+            <div class="mb-1 text-xs font-semibold uppercase tracking-wide text-stone-500">
+              How it's solved
+            </div>
+            <p id="scenario-solution" class="text-[14px] text-stone-800"></p>
+          </div>
+        </div>
+
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-stone-600">
+          <span id="scenario-policy" class="font-mono"></span>
+          <span class="flex items-center gap-4">
+            <span class="inline-flex items-center gap-1.5">
+              <span class="inline-block h-3 w-3 rounded-[2px] bg-emerald-600"></span>
+              <span>Allowed (200)</span>
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+              <span class="inline-block h-3 w-3 rounded-[2px] bg-rose-600"></span>
+              <span>Rejected (429)</span>
+            </span>
+          </span>
+        </div>
+
+        <div id="scenario-rows" class="divide-y divide-stone-100"></div>
+      </section>
+
+      <section class="rounded border border-stone-200 bg-white p-5">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-[15px] font-semibold text-stone-900">Try it live</h2>
+            <p class="text-[14px] text-stone-600">
+              Fires 15 real HTTP requests against
+              <code class="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]"
+                >GET /api/limited/:algorithm</code
+              >
+              (limit 10 per 10 s) and inspects the IETF
+              <code class="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]"
+                >RateLimit-Policy</code
+              >,
+              <code class="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">RateLimit</code
+              >, and
+              <code class="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]"
+                >Retry-After</code
+              >
+              response headers.
+            </p>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <label for="live-algorithm" class="text-xs font-medium text-stone-700">Algorithm</label>
+            <select
+              id="live-algorithm"
+              class="rounded border border-stone-300 bg-white px-2.5 py-1.5 text-[14px] text-stone-900"
+            >
+              <option value="fixed-window">fixed-window</option>
+              <option value="sliding-log">sliding-log</option>
+              <option value="sliding-window-counter">sliding-window-counter</option>
+              <option value="token-bucket">token-bucket</option>
+            </select>
+            <button
+              id="live-fire-btn"
+              type="button"
+              class="cursor-pointer rounded bg-teal-700 px-3.5 py-1.5 text-[14px] font-medium text-white hover:bg-teal-800 disabled:opacity-50"
+            >
+              Fire 15 requests
+            </button>
+          </div>
+        </div>
+
+        <div id="live-summary" class="mb-2 text-xs text-stone-600">
+          Select an algorithm and click "Fire 15 requests" to inspect live headers.
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full border-collapse text-left font-mono text-xs">
+            <thead>
+              <tr class="border-b border-stone-200 text-stone-500">
+                <th class="py-1.5 pr-3 font-medium">#</th>
+                <th class="py-1.5 pr-3 font-medium">Status</th>
+                <th class="py-1.5 pr-3 font-medium">RateLimit-Policy</th>
+                <th class="py-1.5 pr-3 font-medium">RateLimit</th>
+                <th class="py-1.5 pr-3 font-medium">Retry-After</th>
+              </tr>
+            </thead>
+            <tbody id="live-table-body" class="divide-y divide-stone-100 text-stone-800"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
